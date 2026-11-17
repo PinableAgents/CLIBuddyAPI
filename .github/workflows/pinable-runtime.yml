@@ -4,25 +4,12 @@ name: Pinable desktop runtime
 #   - quality  → Python 分发脚本测试 + 完整 go test
 #   - package  → 六个平台各在原生机器上构建（CGO=0），并实际运行打好的程序做宿主契约冒烟
 #   - assemble → 校验六个平台的产物，生成 runtime-index.json、validation.json 与 SHA256SUMS
-#   - publish  → 只在 main 推送或手动勾选时发布 pinable-runtime-<版本> Release，不标 Latest，
-#                不影响 go-binaries 的 vX.Y.Z / latest Release 与面板一键更新
+#   - publish  → 只在 main 推送或手动勾选时发布 pinable-runtime-<版本> Release，不标 Latest
+# 本仓库只保留这一条工作流：只在 main 推送和手动触发时运行，PR 不跑，节省 Actions 额度。
 # 契约与文件格式见 docs/desktop-runtime.md。
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-    paths:
-      - 'cmd/server/**'
-      - 'internal/**'
-      - 'web/**'
-      - 'go.mod'
-      - 'go.sum'
-      - 'LICENSE'
-      - 'NOTICE'
-      - '.github/workflows/pinable-runtime.yml'
-      - 'scripts/pinable/**'
-      - 'docs/desktop-runtime.md'
   workflow_dispatch:
     inputs:
       version:
@@ -38,12 +25,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: pinable-runtime-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: pinable-runtime-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONDONTWRITEBYTECODE: '1'
-  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  SOURCE_SHA: ${{ github.sha }}
   RUNTIME_VERSION: ${{ inputs.version || '' }}
 
 jobs:
