@@ -247,6 +247,7 @@ flowchart LR
 | [项目来源与上游同步](docs/upstream.md) | 项目沿革、相对原始项目新增的能力、同步记录 |
 | [更新日志](docs/CHANGELOG.md) | 每个版本的新增、变更与修复 |
 | [发版与版本号](docs/releasing.md) | 版本号规则、发版流程、更新日志的格式 |
+| [Pinable Desktop 运行时](docs/desktop-runtime.md) | 供 Pinable Desktop 托管的便携运行时：宿主契约、出包与发布 |
 | [提交规则](docs/commits.md) | 提交信息格式、type 与 scope、CI 检查与本地钩子 |
 | [issue 处理](docs/issues.md) | 写给维护者：表单、标签、信息检查与超期关闭，平时怎么打标签、关闭选什么理由 |
 | [AGENTS.md](AGENTS.md) | 给 AI 编程工具看的开发说明，以及复制、借鉴本项目代码时的署名要求 |

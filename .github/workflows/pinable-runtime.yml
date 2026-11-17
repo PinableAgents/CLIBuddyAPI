@@ -1,0 +1,260 @@
+name: Pinable desktop runtime
+
+# 供 Pinable Desktop 按需下载的便携运行时，出包方案与 PinableAgents/CLIProxyAPI 的 pinable-runtime 一致：
+#   - quality  → Python 分发脚本测试 + 完整 go test
+#   - package  → 六个平台各在原生机器上构建（CGO=0），并实际运行打好的程序做宿主契约冒烟
+#   - assemble → 校验六个平台的产物，生成 runtime-index.json、validation.json 与 SHA256SUMS
+#   - publish  → 只在 main 推送或手动勾选时发布 pinable-runtime-<版本> Release，不标 Latest，
+#                不影响 go-binaries 的 vX.Y.Z / latest Release 与面板一键更新
+# 契约与文件格式见 docs/desktop-runtime.md。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cmd/server/**'
+      - 'internal/**'
+      - 'web/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.github/workflows/pinable-runtime.yml'
+      - 'scripts/pinable/**'
+      - 'docs/desktop-runtime.md'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '可选的版本标签；默认是源码提交时间 + SHA'
+        type: string
+        required: false
+      publish_release:
+        description: '发布这次手动构建（main 推送本来就会自动发布）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pinable-runtime-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  RUNTIME_VERSION: ${{ inputs.version || '' }}
+
+jobs:
+  # 面板前端：构建一次，产物供 quality / package 用 go:embed 打进程序（dist 不进版本库）
+  web:
+    if: github.repository == 'PinableLab/CLIBuddyAPI'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinable-panel-dist
+          path: internal/panel/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  quality:
+    if: github.repository == 'PinableLab/CLIBuddyAPI'
+    needs: [web]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinable-panel-dist
+          path: internal/panel/dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 分发脚本测试
+        run: python -m unittest discover -s scripts/pinable -p 'test_*runtime.py' -v
+      - name: 完整 Go 测试
+        run: go test ./...
+
+  package:
+    if: github.repository == 'PinableLab/CLIBuddyAPI'
+    needs: [web]
+    name: Package ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows/amd64
+            id: windows-amd64
+            runner: windows-2025
+          - target: windows/arm64
+            id: windows-arm64
+            runner: windows-11-arm
+          - target: darwin/amd64
+            id: darwin-amd64
+            runner: macos-15-intel
+          - target: darwin/arm64
+            id: darwin-arm64
+            runner: macos-15
+          - target: linux/amd64
+            id: linux-amd64
+            runner: ubuntu-22.04
+          - target: linux/arm64
+            id: linux-arm64
+            runner: ubuntu-22.04-arm
+    env:
+      CGO_ENABLED: '0'
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinable-panel-dist
+          path: internal/panel/dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 原生架构上的宿主契约测试
+        shell: bash
+        run: |
+          python -m unittest discover -s scripts/pinable -p 'test_*runtime.py' -v
+          go test ./cmd/server ./internal/selfupdate -run 'Test.*(Hosted|RuntimeInfo|Parent|ProcessAlive|Version)' -count=1
+      - name: 构建固定来源的便携运行时
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pinable-runtime-${{ matrix.id }}
+        shell: bash
+        run: python scripts/pinable/runtime.py build --target "$TARGET" --version "$RUNTIME_VERSION" --output "$ARTIFACT_DIR"
+      - name: 实际运行打好的程序
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pinable-runtime-${{ matrix.id }}
+        shell: bash
+        run: python scripts/pinable/smoke_runtime.py --artifact-dir "$ARTIFACT_DIR"
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: pinable-runtime-${{ matrix.id }}
+          path: ${{ runner.temp }}/pinable-runtime-${{ matrix.id }}/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: 记录本平台下载
+        shell: bash
+        env:
+          DOWNLOAD_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: printf '%s\n' "### $TARGET" "[下载原生验证过的运行时]($DOWNLOAD_URL)" >> "$GITHUB_STEP_SUMMARY"
+
+  assemble:
+    name: Verify complete runtime set
+    needs: [quality, package]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pinable-runtime-*
+          path: ${{ runner.temp }}/runtime-input
+      - name: 校验每个压缩包并生成索引与校验和
+        env:
+          INPUT_DIR: ${{ runner.temp }}/runtime-input
+          OUTPUT_DIR: ${{ runner.temp }}/runtime-downloads
+        run: |
+          python scripts/pinable/runtime.py index --input "$INPUT_DIR" --output "$OUTPUT_DIR" --expected-commit "$SOURCE_SHA"
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path(os.environ['INPUT_DIR'])
+          reports = [json.loads(p.read_text()) for p in root.rglob('smoke-report.json')]
+          expected = {f'{s}/{a}' for s in ['windows','darwin','linux'] for a in ['amd64','arm64']}
+          assert len(reports) == 6 and {r['target'] for r in reports} == expected
+          assert all(r['status'] == 'passed' and r['source_commit'] == os.environ['SOURCE_SHA'] for r in reports)
+          output = pathlib.Path(os.environ['OUTPUT_DIR'])
+          index = json.loads((output / 'runtime-index.json').read_text())
+          hashes = {m['target']: m['binary']['sha256'] for m in index['targets']}
+          assert all(r['binary_sha256'] == hashes[r['target']] for r in reports)
+          (output / 'validation.json').write_text(json.dumps({'source_commit':os.environ['SOURCE_SHA'],'quality':'passed','native_smoke':reports}, indent=2)+'\n')
+          with (output / 'SHA256SUMS').open('a') as sums:
+              sums.write(hashlib.sha256((output / 'validation.json').read_bytes()).hexdigest() + '  validation.json\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: pinable-runtime-all
+          path: ${{ runner.temp }}/runtime-downloads/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+      - name: 记录完整下载
+        env:
+          DOWNLOAD_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          printf '%s\n' '## Pinable Desktop 运行时' "源码：\`$SOURCE_SHA\`" "[下载六个平台、索引与 SHA256SUMS]($DOWNLOAD_URL)" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish verified stable runtime
+    if: >-
+      github.repository == 'PinableLab/CLIBuddyAPI' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release))
+    needs: [assemble]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinable-runtime-all
+          path: ${{ runner.temp }}/runtime-release
+      - name: 发布不可覆盖的运行时 Release（不替换 Latest）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_DIR: ${{ runner.temp }}/runtime-release
+        run: python scripts/pinable/publish_runtime.py --directory "$RELEASE_DIR" --expected-commit "$SOURCE_SHA"
