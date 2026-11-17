@@ -49,7 +49,7 @@ env:
 jobs:
   # 面板前端：构建一次，产物供 quality / package 用 go:embed 打进程序（dist 不进版本库）
   web:
-    if: github.repository == 'PinableLab/CLIBuddyAPI'
+    if: github.repository == 'PinableAgents/CLIBuddyAPI'
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     defaults:
@@ -75,7 +75,7 @@ jobs:
           retention-days: 7
 
   quality:
-    if: github.repository == 'PinableLab/CLIBuddyAPI'
+    if: github.repository == 'PinableAgents/CLIBuddyAPI'
     needs: [web]
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -102,7 +102,7 @@ jobs:
         run: go test ./...
 
   package:
-    if: github.repository == 'PinableLab/CLIBuddyAPI'
+    if: github.repository == 'PinableAgents/CLIBuddyAPI'
     needs: [web]
     name: Package ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
@@ -233,7 +233,7 @@ jobs:
   publish:
     name: Publish verified stable runtime
     if: >-
-      github.repository == 'PinableLab/CLIBuddyAPI' && github.ref == 'refs/heads/main' &&
+      github.repository == 'PinableAgents/CLIBuddyAPI' && github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release))
     needs: [assemble]
     runs-on: ubuntu-22.04

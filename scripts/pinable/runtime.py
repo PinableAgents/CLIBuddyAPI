@@ -28,7 +28,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timezone
 
-REPOSITORY = "https://github.com/PinableLab/CLIBuddyAPI"
+REPOSITORY = "https://github.com/PinableAgents/CLIBuddyAPI"
 COMPONENT = "clibuddyapi"
 TARGETS = tuple(f"{system}/{arch}" for system in ("windows", "darwin", "linux")
                 for arch in ("amd64", "arm64"))
