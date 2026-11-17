@@ -37,7 +37,7 @@ class PublishTests(unittest.TestCase):
              'binary_sha256': m['binary']['sha256']} for m in self.index['targets']]}
         (self.output / 'validation.json').write_bytes(runtime.encoded(self.validation))
         self.checksums()
-        self.env = {'GITHUB_REPOSITORY': 'PinableLab/CLIBuddyAPI',
+        self.env = {'GITHUB_REPOSITORY': 'PinableAgents/CLIBuddyAPI',
                     'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main',
                     'GITHUB_SHA': COMMIT}
 
