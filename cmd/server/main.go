@@ -79,9 +79,19 @@ func fatalf(format string, args ...any) {
 func main() {
 	cfgPath := flag.String("config", "config.json", "配置文件路径（默认当前目录 config.json；不存在时自动生成推荐配置）")
 	showVersion := flag.Bool("version", false, "打印版本号后退出（一键更新用它试运行新程序）")
+	showRuntimeInfo := flag.Bool("runtime-info", false, "以 JSON 打印宿主契约与出包元数据后退出")
+	parentPID := flag.Int("parent-pid", 0, "由宿主托管运行：该进程退出后本进程优雅停机，并关闭一键更新")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(appVersion)
+		exitFunc(0)
+		return
+	}
+	if *showRuntimeInfo {
+		if err := writeRuntimeInfo(os.Stdout); err != nil {
+			fatalf("runtime info: %v", err)
+			return
+		}
 		exitFunc(0)
 		return
 	}
@@ -96,9 +106,20 @@ func main() {
 		log.Printf("DNS: 出站解析只问 %v（不走系统解析器）", cfg.DNSServers)
 	}
 	// 数据目录里有面板装好的新版就 exec 过去（不返回）：放在读取账号、恢复状态之前，什么都还没动。
-	upd := launchUpdater(filepath.Dir(cfg.StateFile), appVersion)
+	// 宿主托管时版本由宿主管理：不切到数据目录里的版本，面板一键更新也关掉。
+	var upd *selfupdate.Updater
+	if *parentPID > 0 {
+		upd = selfupdate.Hosted(filepath.Dir(cfg.StateFile), appVersion, hostedUpdateReason)
+	} else {
+		upd = launchUpdater(filepath.Dir(cfg.StateFile), appVersion)
+	}
 	sigCtx, stop := notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	restart, err := run(sigCtx, cfg, *cfgPath, upd, newUpstream(), nil)
+	runCtx, stopRun := context.WithCancel(sigCtx)
+	if *parentPID > 0 {
+		go watchParent(runCtx, *parentPID, stopRun)
+	}
+	restart, err := run(runCtx, cfg, *cfgPath, upd, newUpstream(), nil)
+	stopRun()
 	stop()
 	if err != nil {
 		fatalf("%v", err)

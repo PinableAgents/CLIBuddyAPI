@@ -127,6 +127,14 @@ func Launch(dataDir, version string) *Updater {
 	return u
 }
 
+// Hosted 由外部宿主（如 Pinable Desktop）管理程序版本时调用：不切换到数据目录里的版本，
+// 面板的一键更新与回退都按 reason 拒绝，升级交给宿主。
+func Hosted(dataDir, version, reason string) *Updater {
+	u := newUpdater(dataDir, version)
+	u.unsupported = reason
+	return u
+}
+
 // osExecutable 供测试替换（默认 os.Executable）。
 var osExecutable = os.Executable
 
