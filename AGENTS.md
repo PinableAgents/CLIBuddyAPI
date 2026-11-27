@@ -70,3 +70,7 @@ go test ./...                       # 先构建前端，面板相关的测试要
 - 提交规则见 [docs/commits.md](docs/commits.md)：中文 Conventional Commits，scope 从表里选，标题不超过 50 字，提交要签名。本地钩子：`git config core.hooksPath .githooks`。
 - 每个提交都要能编译、测试通过。
 - 发版见 [docs/releasing.md](docs/releasing.md)：推送到 `main` 就发版；使用者看得到的改动，要在最后的 `chore(release): x.y.z` 提交里升 `cmd/server/main.go` 的 `appVersion`，并写 `docs/CHANGELOG.md`。
+
+## Git ignore rules
+
+For local files and generated indexes, follow the [Pinable Git ignore baseline](https://github.com/PinableLab/pinable-rules/blob/main/common/development.md#git-忽略规则). Keep `.codegraph/` and local environment overrides out of Git. Preserve tracked examples and shared configuration.
