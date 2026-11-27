@@ -1,3 +1,8 @@
+# Pinable shared local files
+.codegraph/
+Thumbs.db
+[Dd]esktop.ini
+
 # Auth & secrets
 auths/
 data/
@@ -7,7 +12,7 @@ data/
 .env
 .env.*
 
-# Binaries (anchored to repo root only — bare "login"/"credit" would also ignore cmd/login/, cmd/credit/)
+# Binaries (anchored to repo root only �� bare "login"/"credit" would also ignore cmd/login/, cmd/credit/)
 /login
 /credit
 /wb2api
@@ -20,7 +25,7 @@ config.json
 *.tmp
 __pycache__/
 
-# 面板前端（web/）的依赖与构建产物。dist 只保留 .gitkeep（没构建前端时 go:embed 也能通过编译）
+# ���ǰ�ˣ�web/���������빹�����dist ֻ���� .gitkeep��û����ǰ��ʱ go:embed Ҳ��ͨ�����룩
 web/node_modules/
 internal/panel/dist/*
 !internal/panel/dist/.gitkeep
@@ -35,11 +40,11 @@ LOOP.md
 PLAN.md
 SPEC.md
 
-# 设计/计划文档（但 README.md、AGENTS.md 与 docs/ 下的使用文档必须进版本库）
+# ���/�ƻ��ĵ����� README.md��AGENTS.md �� docs/ �µ�ʹ���ĵ�������汾�⣩
 *.md
 !README.md
 !/docs/*.md
-# 给 AI 编程工具看的仓库说明
+# �� AI ��̹��߿��Ĳֿ�˵��
 !/AGENTS.md
 !/CLAUDE.md
 
@@ -48,8 +53,14 @@ SPEC.md
 /login.exe
 /credit.exe
 
-# 本地验证工具（判据逆向过程脚本，结论沉淀于 data/desktop-task-protocol.md）
+# ������֤���ߣ��о�������̽ű������۳����� data/desktop-task-protocol.md��
 /cmd/desktopverify*/
 *.zip
 server.exe
 .DS_Store
+
+# Environment config templates (not credentials)
+!.env.example
+!.env.sample
+!.env.template
+!.env.dist
